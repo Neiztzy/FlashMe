@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FlashQuest — Easy Spaced Repetition</title>
+<style>
+  :root{
+    --bg:#0f1218; --panel:#161b22; --card:#1c2330; --muted:#8ea0b5; --text:#e8eef7;
+    --accent:#7dd3fc; --accent2:#a7f3d0; --danger:#fda4af; --ok:#bae6fd; --good:#86efac;
+  }
+  *{box-sizing:border-box} html,body{height:100%} body{
+    margin:0; background:linear-gradient(180deg,#0e1116,#0f141c 40%,#0b1017);
+    color:var(--text); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  }
+  header{position:sticky; top:0; z-index:5; backdrop-filter:saturate(140%) blur(6px);
+    background:rgba(15,18,24,.7); border-bottom:1px solid #222; padding:.75rem 1rem; display:flex; align-items:center; gap:1rem}
+  header h1{font-size:1rem; margin:0; letter-spacing:.3px}
+  header .pill{margin-left:auto; display:flex; gap:.5rem}
+  .pill span{background:var(--panel); border:1px solid #202735; border-radius:999px; padding:.35rem .6rem; font-size:.8rem; color:var(--muted)}
+  .app{display:grid; grid-template-columns: 260px 1fr; min-height:calc(100vh - 56px)}
+  aside{border-right:1px solid #1f2734; background:var(--panel); padding:1rem; display:flex; flex-direction:column; gap:1rem}
+  .btn{border:1px solid #273244; background:#1a2230; color:var(--text); padding:.6rem .8rem; border-radius:.65rem; cursor:pointer}
+  .btn:hover{border-color:#324058}
+  .btn-primary{background:linear-gradient(180deg,#253448,#1b2636); border-color:#2b3a52}
+  .btn-accent{background:linear-gradient(180deg,#133a4b,#0f2f40); border-color:#1e4a63; color:#dff6ff}
+  .btn-good{background:linear-gradient(180deg,#0e3a1f,#0b2f19); border-color:#185a34; color:#d7ffe8}
+  .btn-danger{background:linear-gradient(180deg,#4a1620,#3a1119); border-color:#6b1e2c; color:#ffe6ea}
+  .section-title{font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.12em}
+  .deck{display:flex; justify-content:space-between; align-items:center; padding:.5rem .6rem; border-radius:.5rem; cursor:pointer}
+  .deck:hover{background:#1a2130}
+  .deck.active{outline:2px solid #2d4058; background:#182032}
+  .tag{font-size:.75rem; color:#b3c6d8; background:#0f1824; border:1px solid #1f2a3a; padding:.1rem .4rem; border-radius:.4rem}
+  main{padding:1rem; display:grid; gap:1rem; align-content:start}
+  .tabs{display:flex; gap:.5rem}
+  .tab{padding:.5rem .75rem; border-radius:.6rem; border:1px solid #223046; cursor:pointer; background:#141b27; color:#cdd9ea}
+  .tab.active{background:#182235; border-color:#2a3b55}
+  .panel{background:var(--card); border:1px solid #1f2735; border-radius:1rem; padding:1rem}
+  .review-card{display:grid; gap:1rem; place-items:center; text-align:center; padding:2rem}
+  .prompt{font-size:1.5rem}
+  .answer{display:none; font-size:1.1rem; color:#cfe8ff}
+  .reveal{margin-top:.25rem}
+  .choices{display:flex; gap:.5rem; flex-wrap:wrap; justify-content:center}
+  .choices .btn{min-width:110px}
+  .grid{display:grid; gap:.75rem}
+  .grid.two{grid-template-columns:1fr 1fr}
+  input[type="text"], textarea{
+    width:100%; padding:.7rem .8rem; border-radius:.6rem; border:1px solid #223248; background:#101723; color:var(--text);
+  }
+  textarea{min-height:110px; resize:vertical}
+  .muted{color:var(--muted)}
+  .row{display:flex; align-items:center; justify-content:space-between}
+  progress{width:100%; height:12px}
+  .hint{font-size:.85rem; color:#9fb2c8}
+  .kbd{border:1px solid #2b3a52; background:#101722; padding:.05rem .4rem; border-radius:.4rem; font-size:.85rem}
+  .small{font-size:.85rem}
+  .list{display:grid; gap:.5rem}
+  .list-item{padding:.6rem .75rem; background:#121a26; border:1px solid #213149; border-radius:.6rem}
+  .center{display:grid; place-items:center}
+  .empty{opacity:.7}
+  .footer{opacity:.7; font-size:.8rem}
+  @media (max-width: 900px){
+    .app{grid-template-columns:1fr}
+    aside{position:sticky; top:56px; z-index:4; border-right:none; border-bottom:1px solid #1f2734}
+  }
+  canvas.confetti{position:fixed; inset:0; pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 FlashQuest — Easy Spaced Repetition</h1>
+  <div class="pill">
+    <span id="streakPill">🔥 Streak: 0</span>
+    <span id="goalPill">✅ 0 / 20</span>
+    <span id="duePill">🗓️ Due: 0</span>
+  </div>
+</header>
+
+<div class="app">
+  <aside>
+    <div class="row">
+      <div class="section-title">Decks</div>
+      <button class="btn btn-primary small" id="newDeckBtn">＋ New</button>
+    </div>
+    <div id="deckList" class="list"></div>
+    <div class="section-title">Quick Actions</div>
+    <div class="grid">
+      <label class="btn" for="csvInput">⬆️ Import CSV</label>
+      <input id="csvInput" type="file" accept=".csv" style="display:none">
+      <button class="btn" id="exportBtn">⬇️ Export JSON</button>
+      <button class="btn" id="resetTodayBtn">🔄 Reset Today</button>
+    </div>
+    <div class="footer">Tip: Press <span class="kbd">Space</span> to reveal; <span class="kbd">1</span>/<span class="kbd">2</span>/<span class="kbd">3</span> = Again/Good/Easy.</div>
+  </aside>
+
+  <main>
+    <div class="tabs">
+      <button class="tab active" data-tab="review">Review</button>
+      <button class="tab" data-tab="add">Add</button>
+      <button class="tab" data-tab="manage">Manage</button>
+      <button class="tab" data-tab="stats">Stats</button>
+    </div>
+
+    <!-- REVIEW -->
+    <section class="panel" data-panel="review">
+      <div class="review-card">
+        <div id="emptyState" class="empty" style="display:none">
+          <h3>No cards due right now 🎉</h3>
+          <p class="muted">Add cards or come back later.</p>
+        </div>
+        <div id="qc" class="center" style="width:100%">
+          <div class="prompt" id="frontText">Loading…</div>
+          <button class="btn reveal" id="revealBtn">Reveal</button>
+          <div class="answer" id="backText"></div>
+          <div class="choices" id="choices" style="display:none">
+            <button class="btn btn-danger" data-grade="again">Again</button>
+            <button class="btn btn-accent" data-grade="good">Good</button>
+            <button class="btn btn-good" data-grade="easy">Easy</button>
+          </div>
+          <progress id="progress" value="0" max="20"></progress>
+          <div class="hint small" id="hint">Daily goal: 20 reviews</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADD -->
+    <section class="panel" data-panel="add" style="display:none">
+      <div class="grid">
+        <div class="grid two">
+          <input id="newFront" type="text" placeholder="Front (question/prompt)" />
+          <input id="newBack" type="text" placeholder="Back (answer)" />
+        </div>
+        <button class="btn btn-primary" id="addCardBtn">Add Card</button>
+        <div class="hint">Cards are saved automatically to the selected deck.</div>
+      </div>
+    </section>
+
+    <!-- MANAGE -->
+    <section class="panel" data-panel="manage" style="display:none">
+      <div class="list" id="cardList"></div>
+    </section>
+
+    <!-- STATS -->
+    <section class="panel" data-panel="stats" style="display:none">
+      <div class="grid two">
+        <div class="list-item">
+          <div class="muted small">Streak</div>
+          <div id="streakNum" style="font-size:2rem">0</div>
+        </div>
+        <div class="list-item">
+          <div class="muted small">Reviewed Today</div>
+          <div id="countToday" style="font-size:2rem">0</div>
+        </div>
+      </div>
+      <div class="list-item" style="margin-top:.5rem">
+        <div class="muted small">Next Due Counts (0–7 days)</div>
+        <div id="dueBuckets" style="margin-top:.4rem" class="small"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<canvas class="confetti" id="confetti"></canvas>
+
+<script>
+/* ——— Storage + Model ——— */
+const DB_KEY = 'flashquest_v1';
+const TODAY_KEY = 'flashquest_today';
+const NOW = () => new Date();
+
+const defaultData = {
+  decks: [
+    { id: 'd1', name: 'Sample — Basic Math', createdAt: Date.now() }
+  ],
+  cards: [
+    mkCard('d1','2 + 2 = ?', '4'),
+    mkCard('d1','Square root of 9?', '3'),
+    mkCard('d1','5 × 6 = ?', '30'),
+    mkCard('d1','Capital of Japan?', 'Tokyo'),
+  ],
+  settings: { dailyGoal: 20 },
+  meta: { streak: 0, lastStudyDate: null }
+};
+
+function mkCard(deckId, front, back){
+  return {
+    id: 'c_' + Math.random().toString(36).slice(2),
+    deckId, front, back,
+    box: 0,               // 0=learning,1=day1,2=day3,3=day7+
+    due: Date.now(),      // timestamp
+    lapses: 0, reps: 0, lastResult: null, createdAt: Date.now()
+  };
+}
+
+function load(){
+  const raw = localStorage.getItem(DB_KEY);
+  if(!raw){
+    localStorage.setItem(DB_KEY, JSON.stringify(defaultData));
+    return structuredClone(defaultData);
+  }
+  try { return JSON.parse(raw); } catch { return structuredClone(defaultData); }
+}
+function save(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+
+let db = load();
+let currentDeckId = db.decks[0]?.id;
+
+/* ——— UI Elements ——— */
+const deckList = document.getElementById('deckList');
+const frontText = document.getElementById('frontText');
+const backText = document.getElementById('backText');
+const revealBtn = document.getElementById('revealBtn');
+const choiceRow = document.getElementById('choices');
+const progress = document.getElementById('progress');
+const hint = document.getElementById('hint');
+const emptyState = document.getElementById('emptyState');
+const goalPill = document.getElementById('goalPill');
+const duePill = document.getElementById('duePill');
+const streakPill = document.getElementById('streakPill');
+
+const addCardBtn = document.getElementById('addCardBtn');
+const newFront = document.getElementById('newFront');
+const newBack = document.getElementById('newBack');
+
+const cardList = document.getElementById('cardList');
+
+const tabs = [...document.querySelectorAll('.tab')];
+const panels = [...document.querySelectorAll('[data-panel]')];
+
+document.getElementById('newDeckBtn').addEventListener('click', () => {
+  const name = prompt('New deck name?');
+  if(!name) return;
+  const deck = { id: 'd_' + Math.random().toString(36).slice(2), name, createdAt: Date.now() };
+  db.decks.push(deck); currentDeckId = deck.id; save(); renderAll();
+});
+
+addCardBtn.addEventListener('click', () => {
+  if(!currentDeckId) return alert('Create a deck first.');
+  const f = newFront.value.trim(), b = newBack.value.trim();
+  if(!f || !b) return alert('Please fill both sides.');
+  db.cards.push(mkCard(currentDeckId, f, b)); save();
+  newFront.value=''; newBack.value='';
+  renderManage(); // show it in the list
+  if(activeTab()==='review') pickNextCard();
+});
+
+tabs.forEach(t => t.addEventListener('click', ()=>{
+  tabs.forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const id = t.dataset.tab;
+  panels.forEach(p => p.style.display = (p.dataset.panel===id?'block':'none'));
+  if(id==='manage') renderManage();
+  if(id==='stats') renderStats();
+}));
+
+/* ——— Simple Scheduler ———
+   grade -> next due time + box movement
+   again: 10 minutes, box reset to 0
+   good:  +1 box (max 3): box0->1 (1 day), box1->2 (3 days), box2->3 (7 days), box3 stays (7 days)
+   easy:  jump to box3 (7 days)
+*/
+function schedule(card, grade){
+  const now = Date.now();
+  if(grade==='again'){ card.box=0; card.due = now + 10*60*1000; card.lapses++;}
+  if(grade==='good'){
+    if(card.box===0){ card.box=1; card.due = now + 1*24*60*60*1000; }
+    else if(card.box===1){ card.box=2; card.due = now + 3*24*60*60*1000; }
+    else { card.box=3; card.due = now + 7*24*60*60*1000; }
+  }
+  if(grade==='easy'){ card.box=3; card.due = now + 7*24*60*60*1000; }
+  card.reps++; card.lastResult = grade; save();
+}
+
+function dueCards(deckId){
+  const now = Date.now();
+  return db.cards.filter(c => c.deckId===deckId && c.due<=now);
+}
+
+let currentCard = null;
+
+function pickNextCard(){
+  const pool = dueCards(currentDeckId);
+  document.getElementById('duePill').textContent = `🗓️ Due: ${pool.length}`;
+  if(pool.length===0){ showEmpty(); return; }
+  hideEmpty();
+  // Sort: lowest box first (learning), then least reps
+  pool.sort((a,b)=> (a.box-b.box) || (a.reps-b.reps));
+  currentCard = pool[0];
+  frontText.textContent = currentCard.front;
+  backText.textContent = currentCard.back;
+  backText.style.display='none';
+  revealBtn.style.display='inline-block';
+  choiceRow.style.display='none';
+}
+
+function showEmpty(){
+  emptyState.style.display='block';
+  document.getElementById('qc').style.display='none';
+}
+function hideEmpty(){
+  emptyState.style.display='none';
+  document.getElementById('qc').style.display='block';
+}
+
+/* ——— Daily goal, streak ——— */
+function todayKey(){
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+function loadToday(){
+  const raw = localStorage.getItem(TODAY_KEY);
+  try { return JSON.parse(raw)||{}; } catch { return {}; }
+}
+function saveToday(obj){
+  localStorage.setItem(TODAY_KEY, JSON.stringify(obj));
+}
+function incTodayCount(){
+  const key = todayKey();
+  const t = loadToday();
+  t[key] = (t[key]||0) + 1;
+  saveToday(t);
+  updateGoalPill();
+}
+
+function updateGoalPill(){
+  const key = todayKey();
+  const t = loadToday();
+  const count = t[key]||0;
+  goalPill.textContent = `✅ ${count} / ${db.settings.dailyGoal}`;
+  progress.max = db.settings.dailyGoal;
+  progress.value = Math.min(count, db.settings.dailyGoal);
+  document.getElementById('countToday').textContent = count;
+  if(count>=db.settings.dailyGoal) celebrate();
+}
+
+function updateStreak(){
+  const last = db.meta.lastStudyDate ? new Date(db.meta.lastStudyDate) : null;
+  const today = new Date(todayKey());
+  if(!last){ db.meta.streak = 1; db.meta.lastStudyDate = today.toISOString(); save(); }
+  else{
+    const diffDays = Math.round((today - new Date(last.toISOString().slice(0,10))) / (1000*60*60*24));
+    if(diffDays===1){ db.meta.streak += 1; db.meta.lastStudyDate = today.toISOString(); save(); }
+    else if(diffDays>1){ db.meta.streak = 1; db.meta.lastStudyDate = today.toISOString(); save(); }
+    // diffDays===0: same day, do nothing
+  }
+  streakPill.textContent = `🔥 Streak: ${db.meta.streak}`;
+  document.getElementById('streakNum').textContent = db.meta.streak;
+}
+
+/* ——— Confetti ——— */
+const confettiCanvas = document.getElementById('confetti');
+const ctx = confettiCanvas.getContext('2d');
+let confettiBits = [];
+function resizeCanvas(){
+  confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight;
+}
+addEventListener('resize', resizeCanvas); resizeCanvas();
+
+function celebrate(){
+  // spawn confetti
+  const n = 120;
+  confettiBits = [...Array(n)].map(()=>({
+    x: Math.random()*confettiCanvas.width,
+    y: -10,
+    r: 2+Math.random()*4,
+    vX: -1+Math.random()*2,
+    vY: 1+Math.random()*3
+  }));
+}
+function confettiTick(){
+  ctx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
+  ctx.globalAlpha = 0.9;
+  for(const p of confettiBits){
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = ['#7dd3fc','#a7f3d0','#fdba74','#fda4af'][Math.floor(Math.random()*4)];
+    ctx.fill();
+    p.x += p.vX; p.y += p.vY; p.vY += 0.02;
+  }
+  confettiBits = confettiBits.filter(p => p.y < confettiCanvas.height + 10);
+  requestAnimationFrame(confettiTick);
+}
+confettiTick();
+
+/* ——— Events ——— */
+revealBtn.addEventListener('click', ()=>{
+  backText.style.display='block';
+  revealBtn.style.display='none';
+  choiceRow.style.display='flex';
+});
+document.addEventListener('keydown', (e)=>{
+  if(activeTab()!=='review') return;
+  if(e.code==='Space'){ e.preventDefault(); if(revealBtn.style.display!=='none') revealBtn.click(); }
+  if(e.key==='1' && choiceRow.style.display!=='none') grade('again');
+  if(e.key==='2' && choiceRow.style.display!=='none') grade('good');
+  if(e.key==='3' && choiceRow.style.display!=='none') grade('easy');
+});
+document.getElementById('choices').addEventListener('click', (e)=>{
+  if(e.target.dataset.grade) grade(e.target.dataset.grade);
+});
+
+function grade(g){
+  if(!currentCard) return;
+  schedule(currentCard, g);
+  incTodayCount();
+  db.meta.lastStudyDate = todayKey();
+  save();
+  updateStreak();
+  pickNextCard();
+}
+
+/* ——— Deck UI ——— */
+function renderDecks(){
+  deckList.innerHTML='';
+  db.decks.forEach(d=>{
+    const due = dueCards(d.id).length;
+    const el = document.createElement('div');
+    el.className = 'deck'+(d.id===currentDeckId?' active':'');
+    el.innerHTML = `<div><strong>${escapeHtml(d.name)}</strong></div><div class="tag">${due} due</div>`;
+    el.onclick = ()=>{ currentDeckId = d.id; save(); renderAll(); };
+    deckList.appendChild(el);
+  });
+}
+
+/* ——— Manage Tab ——— */
+function renderManage(){
+  const cards = db.cards.filter(c=>c.deckId===currentDeckId);
+  if(cards.length===0){ cardList.innerHTML = `<div class="empty">No cards in this deck yet.</div>`; return; }
+  cardList.innerHTML='';
+  cards.sort((a,b)=>a.createdAt-b.createdAt).forEach(c=>{
+    const dueInDays = Math.max(0, Math.ceil((c.due - Date.now())/(24*60*60*1000)));
+    const item = document.createElement('div');
+    item.className='list-item';
+    item.innerHTML = `
+      <div class="row" style="gap:.75rem; align-items:start">
+        <div style="flex:1">
+          <div><strong>${escapeHtml(c.front)}</strong></div>
+          <div class="muted small">${escapeHtml(c.back)}</div>
+          <div class="small">Box ${c.box} • Due in ${dueInDays} day(s) • Reps ${c.reps} • Lapses ${c.lapses}</div>
+        </div>
+        <div class="grid" style="min-width:140px">
+          <button class="btn small" data-edit="${c.id}">Edit</button>
+          <button class="btn small" data-del="${c.id}">Delete</button>
+        </div>
+      </div>`;
+    item.querySelector('[data-edit]').onclick = ()=>{
+      const nf = prompt('Edit front', c.front); if(nf==null) return;
+      const nb = prompt('Edit back', c.back); if(nb==null) return;
+      c.front = nf.trim(); c.back = nb.trim(); save(); renderManage(); if(activeTab()==='review') pickNextCard();
+    };
+    item.querySelector('[data-del]').onclick = ()=>{
+      if(confirm('Delete this card?')){ db.cards = db.cards.filter(x=>x.id!==c.id); save(); renderManage(); pickNextCard(); }
+    };
+    cardList.appendChild(item);
+  });
+}
+
+/* ——— Stats ——— */
+function renderStats(){
+  // next 0–7 days buckets
+  const now = Date.now();
+  const counts = Array(8).fill(0);
+  db.cards.filter(c=>c.deckId===currentDeckId).forEach(c=>{
+    const days = Math.floor((c.due - now)/(24*60*60*1000));
+    const bucket = Math.min(7, Math.max(0, days));
+    if(c.due<=now) counts[0]++; else counts[bucket]++;
+  });
+  document.getElementById('dueBuckets').textContent = counts.map((n,i)=> (i===0?`Today: ${n}`:`+${i}d: ${n}`)).join(' • ');
+}
+
+/* ——— CSV Import / Export ——— */
+document.getElementById('csvInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  let added = 0;
+  for(const line of lines){
+    const [f,...rest] = line.split(',');
+    const b = rest.join(','); // allow commas in back
+    if(f?.trim() && b?.trim()){ db.cards.push(mkCard(currentDeckId, f.trim(), b.trim())); added++; }
+  }
+  save(); alert(`Imported ${added} card(s).`); renderManage(); if(activeTab()==='review') pickNextCard();
+  e.target.value='';
+});
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const obj = {
+    deck: db.decks.find(d=>d.id===currentDeckId)?.name,
+    cards: db.cards.filter(c=>c.deckId===currentDeckId).map(({front,back,box,due,reps,lapses})=>({front,back,box,due,reps,lapses}))
+  };
+  const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), {href:url, download:'flashquest_export.json'});
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 500);
+});
+
+document.getElementById('resetTodayBtn').addEventListener('click', ()=>{
+  if(confirm('Reset today’s review count?')){ const t = loadToday(); t[todayKey()] = 0; saveToday(t); updateGoalPill(); }
+});
+
+/* ——— Helpers ——— */
+function activeTab(){ return document.querySelector('.tab.active')?.dataset.tab; }
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m])); }
+
+/* ——— Initial Render ——— */
+function renderAll(){
+  renderDecks();
+  pickNextCard();
+  updateGoalPill();
+  updateStreak();
+}
+renderAll();
+</script>
+</body>
+</html>
